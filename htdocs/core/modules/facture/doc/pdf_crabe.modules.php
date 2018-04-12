@@ -429,8 +429,8 @@ class pdf_crabe extends ModelePDFFactures
 	                $notetoshow = make_substitutions($notetoshow, $substitutionarray, $outputlangs);
 	                
 	                $tab_top = 88 + $height_incoterms;
+	                /*
 	                
-	                $pdf->SetFont('','', $default_font_size - 1);
 	                $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $tab_top, dol_htmlentitiesbr($notetoshow), 0, 1);
 	                $nexY = $pdf->GetY();
 	                $height_note=$nexY-$tab_top;
@@ -438,8 +438,68 @@ class pdf_crabe extends ModelePDFFactures
 	                // Rect prend une longueur en 3eme param
 	                $pdf->SetDrawColor(192,192,192);
 	                $pdf->Rect($this->marge_gauche, $tab_top-1, $this->page_largeur-$this->marge_gauche-$this->marge_droite, $height_note+1);
+	                */
+	                
+	                $textPart1 = $notetoshow;
+	                $textPart2 = '';
+	                $allDone = false;
+	                
+	                
+	                $i=0;
+	                while(!$allDone) // limit to 10 iteration
+	                {
+	                    if($i>10){break;} // infinite loop protection
+	                    $i++;
+	                    
+	                    $pdf->startTransaction();
+	                    
+	                    $posYBefore=$pdf->GetY();
+	                    $pageposbefore=$pdf->getPage();
+	                    $pdf->SetFont('','', $default_font_size - 1);
+	                    $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $tab_top, dol_htmlentitiesbr($textPart1 ), 0, 1);
+	                    
+	                    $posYAfter=$pdf->GetY();
+	                    $pageposafter=$pdf->getPage();
+	                    
+	                    
+	                    if($pageposafter==$pageposbefore && empty($textPart2) )
+	                    {
+	                        $height_note=$posYAfter-$tab_top;
+	                        $pdf->commitTransaction();
+	                        $nexY = $pdf->GetY();
+	                        $allDone=true;
+	                        break;
+	                    }
+	                    elseif($pageposafter==$pageposbefore){
+	                        
+	                        $pdf->AddPage('','',true);
+	                        $pdf->commitTransaction();
+	                        $nexY = $pdf->GetY();
+	                        $split = $this->cutText($textPart1, 2000);
+	                        $textPart1 = $textPart2;
+	                        $textPart2 = 0;
+	                        
+	                        if (! empty($tplidx)) $pdf->useTemplate($tplidx);
+	                        if (empty($conf->global->MAIN_PDF_DONOTREPEAT_HEAD)) $this->_pagehead($pdf, $object, 0, $outputlangs);
+	                        $pdf->setPage($pageposbefore+1);
+	                        $pageposbefore=$pdf->getPage();
+	                        
+	                        $curY = $tab_top_newpage;
+	                    }
+	                    else{//if($pageposafter>$pageposbefore)
+	                        $pdf->rollbackTransaction(true);
+	                        $split = $this->cutText($textPart1, 2000);
+
+	                        $textPart1 = $split[0];
+	                        $textPart2 = $split[1];
+	                    }
+	                }
 	                
 	                $tab_height = $tab_height - $height_note;
+	                
+	                // reset pointer to the last page
+	                $pdf->lastPage();
+	                
 	                $tab_top = $nexY+6;
 	            }
 	            else
@@ -2127,6 +2187,14 @@ class pdf_crabe extends ModelePDFFactures
 	    }
 	    
 	}
+	
+	function cutText($string, $numb){
+	    return array(
+	        substr ( $string, 0, strlen($string) - $numb),
+	        substr ( $string, strlen($string) - $numb)
+	    );
+	}
+	
 	
 	
 }

@@ -409,7 +409,7 @@ class pdf_crabe extends ModelePDFFactures
 	                }
 	            }
 	            
-	            // Affiche notes
+	            // DISPLAY PUBLIC NOTE
 	            $notetoshow=empty($object->note_public)?'':$object->note_public;
 	            if (! empty($conf->global->MAIN_ADD_SALE_REP_SIGNATURE_IN_NOTE))
 	            {
@@ -443,7 +443,7 @@ class pdf_crabe extends ModelePDFFactures
 	                $textPart1 = $notetoshow;
 	                $textPart2 = '';
 	                $allDone = false;
-	                
+	                $noteYpos = $tab_top;
 	                
 	                $i=0;
 	                while(!$allDone) // limit to 10 iteration
@@ -456,7 +456,7 @@ class pdf_crabe extends ModelePDFFactures
 	                    $posYBefore=$pdf->GetY();
 	                    $pageposbefore=$pdf->getPage();
 	                    $pdf->SetFont('','', $default_font_size - 1);
-	                    $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $tab_top, dol_htmlentitiesbr($textPart1 ), 0, 1);
+	                    $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $noteYpos, dol_htmlentitiesbr($textPart1 ), 0, 1);
 	                    
 	                    $posYAfter=$pdf->GetY();
 	                    $pageposafter=$pdf->getPage();
@@ -464,7 +464,10 @@ class pdf_crabe extends ModelePDFFactures
 	                    
 	                    if($pageposafter==$pageposbefore && empty($textPart2) )
 	                    {
-	                        $height_note=$posYAfter-$tab_top;
+	                        $height_note = $posYBefore - $posYAfter;
+	                        $nexY = $tab_top_newpage + $height_note;
+	                        $tab_height = $tab_height_newpage - $height_note;
+	                        $curY = $nexY;
 	                        $pdf->commitTransaction();
 	                        $nexY = $pdf->GetY();
 	                        $allDone=true;
@@ -472,9 +475,13 @@ class pdf_crabe extends ModelePDFFactures
 	                    }
 	                    elseif($pageposafter==$pageposbefore){
 	                        
+	                        // add new page and commit transaction	
 	                        $pdf->AddPage('','',true);
+	                        $pagenb++;
 	                        $pdf->commitTransaction();
 	                        $nexY = $pdf->GetY();
+	                        
+	                        // Re init text slpiting
 	                        $split = $this->cutText($textPart1, 2000);
 	                        $textPart1 = $textPart2;
 	                        $textPart2 = 0;
@@ -483,7 +490,7 @@ class pdf_crabe extends ModelePDFFactures
 	                        if (empty($conf->global->MAIN_PDF_DONOTREPEAT_HEAD)) $this->_pagehead($pdf, $object, 0, $outputlangs);
 	                        $pdf->setPage($pageposbefore+1);
 	                        $pageposbefore=$pdf->getPage();
-	                        
+	                        $noteYpos = $tab_top_newpage;
 	                        $curY = $tab_top_newpage;
 	                    }
 	                    else{//if($pageposafter>$pageposbefore)
@@ -495,7 +502,6 @@ class pdf_crabe extends ModelePDFFactures
 	                    }
 	                }
 	                
-	                $tab_height = $tab_height - $height_note;
 	                
 	                // reset pointer to the last page
 	                $pdf->lastPage();

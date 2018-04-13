@@ -409,7 +409,7 @@ class pdf_crabe extends ModelePDFFactures
 	                }
 	            }
 	            
-	            // DISPLAY PUBLIC NOTE
+	            // Affiche notes
 	            $notetoshow=empty($object->note_public)?'':$object->note_public;
 	            if (! empty($conf->global->MAIN_ADD_SALE_REP_SIGNATURE_IN_NOTE))
 	            {
@@ -429,21 +429,11 @@ class pdf_crabe extends ModelePDFFactures
 	                $notetoshow = make_substitutions($notetoshow, $substitutionarray, $outputlangs);
 	                
 	                $tab_top = 88 + $height_incoterms;
-	                /*
-	                
-	                $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $tab_top, dol_htmlentitiesbr($notetoshow), 0, 1);
-	                $nexY = $pdf->GetY();
-	                $height_note=$nexY-$tab_top;
-	                
-	                // Rect prend une longueur en 3eme param
-	                $pdf->SetDrawColor(192,192,192);
-	                $pdf->Rect($this->marge_gauche, $tab_top-1, $this->page_largeur-$this->marge_gauche-$this->marge_droite, $height_note+1);
-	                */
+	                $curY = $tab_top;
 	                
 	                $textPart1 = $notetoshow;
 	                $textPart2 = '';
 	                $allDone = false;
-	                $noteYpos = $tab_top;
 	                
 	                $i=0;
 	                while(!$allDone) // limit to 10 iteration
@@ -453,55 +443,57 @@ class pdf_crabe extends ModelePDFFactures
 	                    
 	                    $pdf->startTransaction();
 	                    
-	                    $posYBefore=$pdf->GetY();
+	                    $posYBefore=$curY;
 	                    $pageposbefore=$pdf->getPage();
 	                    $pdf->SetFont('','', $default_font_size - 1);
-	                    $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $noteYpos, dol_htmlentitiesbr($textPart1 ), 0, 1);
+	                    $pdf->writeHTMLCell(190, 3, $this->posxdesc-1, $curY, dol_htmlentitiesbr($textPart1 ), 0, 1);
 	                    
 	                    $posYAfter=$pdf->GetY();
 	                    $pageposafter=$pdf->getPage();
 	                    
+	                    $height_note=$posYAfter-$posYBefore;
+	                    
+	                    // Rect prend une longueur en 3eme param
+	                    $pdf->SetDrawColor(192,192,192);
+	                    $pdf->Rect($this->marge_gauche, $posYBefore-1, $this->page_largeur-$this->marge_gauche-$this->marge_droite, $height_note+1);
 	                    
 	                    if($pageposafter==$pageposbefore && empty($textPart2) )
 	                    {
-	                        $height_note = $posYBefore - $posYAfter;
-	                        $nexY = $tab_top_newpage + $height_note;
-	                        $tab_height = $tab_height_newpage - $height_note;
-	                        $curY = $nexY;
 	                        $pdf->commitTransaction();
 	                        $nexY = $pdf->GetY();
+	                        
 	                        $allDone=true;
 	                        break;
 	                    }
 	                    elseif($pageposafter==$pageposbefore){
 	                        
-	                        // add new page and commit transaction	
 	                        $pdf->AddPage('','',true);
-	                        $pagenb++;
 	                        $pdf->commitTransaction();
 	                        $nexY = $pdf->GetY();
 	                        
-	                        // Re init text slpiting
-	                        $split = $this->cutText($textPart1, 2000);
+	                        
+	                        $split = $this->cutText($textPart1);
 	                        $textPart1 = $textPart2;
 	                        $textPart2 = 0;
 	                        
 	                        if (! empty($tplidx)) $pdf->useTemplate($tplidx);
 	                        if (empty($conf->global->MAIN_PDF_DONOTREPEAT_HEAD)) $this->_pagehead($pdf, $object, 0, $outputlangs);
 	                        $pdf->setPage($pageposbefore+1);
+	                        $pagenb++;
 	                        $pageposbefore=$pdf->getPage();
-	                        $noteYpos = $tab_top_newpage;
+	                        
 	                        $curY = $tab_top_newpage;
 	                    }
 	                    else{//if($pageposafter>$pageposbefore)
 	                        $pdf->rollbackTransaction(true);
-	                        $split = $this->cutText($textPart1, 2000);
+	                        $split = $this->cutText($textPart1);
 
 	                        $textPart1 = $split[0];
 	                        $textPart2 = $split[1];
 	                    }
 	                }
 	                
+	                $tab_height = $tab_height - $height_note;
 	                
 	                // reset pointer to the last page
 	                $pdf->lastPage();
@@ -520,6 +512,9 @@ class pdf_crabe extends ModelePDFFactures
 	            // Use new auto collum system
 	            $this->prepareArrayColumnField($object,$outputlangs,$hidedetails,$hidedesc,$hideref);
 	            
+	            
+	            $pageposbeforeprintlines=$pdf->getPage();
+	            $pagenb = $pageposbeforeprintlines;
 	            // Loop on each lines
 	            for ($i = 0; $i < $nblignes; $i++)
 	            {
@@ -740,10 +735,11 @@ class pdf_crabe extends ModelePDFFactures
 	                        $nexY+=2;    // Passe espace entre les lignes
 	                        
 	                        // Detect if some page were added automatically and output _tableau for past pages
+	                        
 	                        while ($pagenb < $pageposafter)
 	                        {
 	                            $pdf->setPage($pagenb);
-	                            if ($pagenb == 1)
+	                            if ($pagenb == $pageposbeforeprintlines)
 	                            {
 	                                $this->_tableau($pdf, $tab_top, $this->page_hauteur - $tab_top - $heightforfooter, 0, $outputlangs, 0, 1, $object->multicurrency_code);
 	                            }
@@ -757,9 +753,10 @@ class pdf_crabe extends ModelePDFFactures
 	                            $pdf->setPageOrientation('', 1, 0);	// The only function to edit the bottom margin of current page to set it.
 	                            if (empty($conf->global->MAIN_PDF_DONOTREPEAT_HEAD)) $this->_pagehead($pdf, $object, 0, $outputlangs);
 	                        }
+	                        
 	                        if (isset($object->lines[$i+1]->pagebreak) && $object->lines[$i+1]->pagebreak)
 	                        {
-	                            if ($pagenb == 1)
+	                            if ($pagenb == $pageposafter)
 	                            {
 	                                $this->_tableau($pdf, $tab_top, $this->page_hauteur - $tab_top - $heightforfooter, 0, $outputlangs, 0, 1, $object->multicurrency_code);
 	                            }
@@ -778,9 +775,9 @@ class pdf_crabe extends ModelePDFFactures
 	            }
 	            
 	            // Show square
-	            if ($pagenb == 1)
+	            if ($pagenb == $pageposbeforeprintlines)
 	            {
-	                $this->_tableau($pdf, $tab_top, $this->page_hauteur - $tab_top - $heightforinfotot - $heightforfreetext - $heightforfooter, 0, $outputlangs, 0, 0, $object->multicurrency_code);
+	                //$this->_tableau($pdf, $tab_top, $this->page_hauteur - $tab_top - $heightforinfotot - $heightforfreetext - $heightforfooter, 0, $outputlangs, 0, 0, $object->multicurrency_code);
 	                $bottomlasttab=$this->page_hauteur - $heightforinfotot - $heightforfreetext - $heightforfooter + 1;
 	            }
 	            else
@@ -2194,7 +2191,8 @@ class pdf_crabe extends ModelePDFFactures
 	    
 	}
 	
-	function cutText($string, $numb){
+	function cutText($string){
+	    $numb = 2000;
 	    return array(
 	        substr ( $string, 0, strlen($string) - $numb),
 	        substr ( $string, strlen($string) - $numb)
